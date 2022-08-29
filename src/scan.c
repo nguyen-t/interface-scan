@@ -14,7 +14,7 @@
 
 #define ICMP_PORT 0
 #define ICMP_TTL  64
-#define RECV_WAIT 250
+#define RECV_WAIT 50
 
 /**
  * @desc Calculate 16-bit CRC Checksum
@@ -24,7 +24,7 @@
  */
 uint16_t checksum(void* raw, int length) {
 	uint16_t* data = raw;
-	uint16_t sum = 0;
+	uint32_t sum = 0;
 
 	// Sum data by 16-bit chunks
 	while(length > 1) {
@@ -40,7 +40,7 @@ uint16_t checksum(void* raw, int length) {
 	sum = (sum >> 16) + (sum & 0xFFFF);
 	sum += sum >> 16;
 	
-	return ~sum;
+	return ~sum & 0xFFFF;
 }
 
 /**
@@ -77,22 +77,17 @@ int ping(int fd, int sequence, struct in_addr address) {
 }
 
 /**
- * @desc Scans over all IP addresses for a given Interface
- * @param {struct ifaddrs*} ifa - A pointer to the interface to scan
+ * @desc Creates an ICMP socket with time limits
+ * @param {int} ttl - Packet time to live in ms
+ * @param {int} wait - Maximum wait time in ms
+ * @return {int} ICMP file descriptor
  */
-void scan_ipv4(struct ifaddrs* ifa) {
+int icmp_socket(int ttl, int wait) {
 	int fd;
-	int ttl = ICMP_TTL;
-	struct sockaddr_in* addr = (struct sockaddr_in*) ifa->ifa_addr; // Interface IP address
-	struct sockaddr_in* mask = (struct sockaddr_in*) ifa->ifa_netmask; // Interface subnet mask
-	struct in_addr base = {
-		.s_addr = addr->sin_addr.s_addr & mask->sin_addr.s_addr
-	};
 	struct timeval time = {
-		.tv_sec = RECV_WAIT / 1000,
-		.tv_usec = (RECV_WAIT % 1000) * 1000 
+		.tv_sec = wait / 1000,
+		.tv_usec = (wait % 1000) * 1000 
 	};
-	uint32_t range = UINT32_MAX - ntohl(mask->sin_addr.s_addr); // Number of IP addresses in mask range
 	
 	// Initalizes socket
 	if((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP)) < 0) {
@@ -112,6 +107,22 @@ void scan_ipv4(struct ifaddrs* ifa) {
 		close(fd);
 		exit(-1);
 	}
+
+	return fd;
+}
+
+/**
+ * @desc Scans over all IP addresses for a given Interface
+ * @param {struct ifaddrs*} ifa - A pointer to the interface to scan
+ */
+void scan_ipv4(struct ifaddrs* ifa) {
+	int fd = icmp_socket(ICMP_TTL, RECV_WAIT);
+	struct sockaddr_in* addr = (struct sockaddr_in*) ifa->ifa_addr; // Interface IP address
+	struct sockaddr_in* mask = (struct sockaddr_in*) ifa->ifa_netmask; // Interface subnet mask
+	struct in_addr base = {
+		.s_addr = addr->sin_addr.s_addr & mask->sin_addr.s_addr
+	};
+	uint32_t range = UINT32_MAX - ntohl(mask->sin_addr.s_addr); // Number of IP addresses in mask range
 
 	printf("Interface:      %s\n", ifa->ifa_name);
 	printf("IPv4 Address:   %s\n", inet_ntoa(addr->sin_addr));
