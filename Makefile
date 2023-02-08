@@ -78,10 +78,12 @@ $(SHARED): $(OBJECTS)
 
 # Link libraries and build executables
 $(OUTPUT): $(OBJECTS)
+	@echo "Building $@"
 	$(CC) $(LDFLAGS) $@ $^ $(addprefix -l, $(LIB_C))
 
 # Link header-only libraries and build object files
 $(OBJDIR)/%$(OBJEXT): $(SRCDIR)/%$(SRCEXT)
+	@echo "Building $@"
 	$(CC) $(CFLAGS) $@ $< $(addprefix -l, $(LIB_H))
 
 # Generate necessary directories
